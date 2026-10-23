@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/filipowm/go-unifi/unifi"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -118,6 +119,37 @@ func TestMergePortOverrides_DeclaredSetSemantics(t *testing.T) {
 		idx, _ := portIdxOf(e)
 		assert.NotEqual(t, 6, idx, "undeclared port 6 must not be carried over")
 	}
+}
+
+// portOverrideModeledKeys is hand-written, so pin it to what toPortOverride
+// actually emits. A field added there but not to the list could never be
+// cleared; a key in the list that toPortOverride doesn't set would be wiped
+// from the controller on every update.
+func TestPortOverrideModeledKeys_MatchToPortOverride(t *testing.T) {
+	po, err := toPortOverride(map[string]interface{}{
+		"number":                1,
+		"name":                  "name",
+		"port_profile_id":       "profile",
+		"op_mode":               "switch",
+		"poe_mode":              "auto",
+		"aggregate_num_ports":   2,
+		"excluded_network_ids":  schema.NewSet(schema.HashString, []interface{}{"net-excluded"}),
+		"native_networkconf_id": "net-native",
+		"tagged_vlan_mgmt":      "custom",
+		"forward":               "customize",
+		"voice_networkconf_id":  "net-voice",
+		"setting_preference":    "manual",
+	})
+	require.NoError(t, err)
+
+	emitted, err := structToMap(po)
+	require.NoError(t, err)
+
+	var keys []string
+	for k := range emitted {
+		keys = append(keys, k)
+	}
+	assert.ElementsMatch(t, portOverrideModeledKeys, keys)
 }
 
 func TestMergePortOverrides_SortedByPortIdx(t *testing.T) {
